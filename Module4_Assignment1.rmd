@@ -1,0 +1,310 @@
+---
+title: "Module4_Assignment1"
+output: word_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include = FALSE}
+library(tidyverse)
+library(tidymodels)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(RColorBrewer)
+```
+
+
+```{r}
+parole <- read_csv("C:/Users/cltma/OneDrive/Documents/BAN502/Module4/Module4_Assignment1/parole.csv")
+```
+
+```{r, echo = FALSE}
+parole <- parole %>% 
+  mutate(male = as_factor(male)) %>%
+  mutate(race = as_factor(race)) %>%
+  mutate(state = as_factor(state)) %>%
+  mutate(crime = as_factor(crime)) %>%
+  mutate(multiple.offenses =as_factor(multiple.offenses)) %>%
+  mutate(violator = as_factor(violator)) %>%
+  mutate(male = fct_recode(male, "Female" = "0", "Male" = "1" )) %>%
+  mutate(race = fct_recode(race, "Non-White" = "2", "White" = "1" )) %>%
+  mutate(state = fct_recode(state, "Kentucky" = "2", "Louisiana" = "3", "Virginia" = "4", "Other" = "1")) %>%
+  mutate(crime = fct_recode(crime, "Larceny" = "2", "Drug-Related Crime" = "3", "Driving-Related Crime" = "4", "All Other" = "1")) %>%
+  mutate(multiple.offenses = fct_recode(multiple.offenses, "No" = "0", "Yes" = "1" )) %>%
+  mutate(violator = fct_recode(violator, "No" = "0", "Yes" = "1" ))
+
+summary(parole)
+glimpse(parole)
+```
+
+### Task 1
+
+```{r split}
+set.seed(12345)
+parole_split = initial_split(parole, prob = 0.70, strata = violator)
+train = training(parole_split)
+test = testing(parole_split)
+```
+
+### Task 2
+
+```{r}
+parole_train_recipe = recipe(violator ~ ., train)
+
+tree_model = decision_tree() %>% 
+  set_engine("rpart", model = TRUE) %>% 
+  set_mode("classification")
+
+parole_train_wflow = 
+  workflow() %>% 
+  add_model(tree_model) %>% 
+  add_recipe(parole_train_recipe)
+
+parole_train_fit = fit(parole_train_wflow, train)
+```
+
+```{r}
+parole_train_fit %>%
+  pull_workflow_fit() %>%
+  pluck("fit")  
+```
+
+```{r}
+tree = parole_train_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+rpart.plot(tree, tweak=1.3)
+
+fancyRpartPlot(tree, tweak=1.3) 
+```
+  
+### Task 3
+
+A 40 year-old parolee from Louisiana who served 5 years in prison, with a sentence of 10 years, and committed multiple offenses would have a decent chance off being a parole violator.  Based on the tree 44% of the data set who met this criteria were parole violators. R determined that state is the most dominant variable in predicting violators.  Since in the example, the statement is untrue we move to the right side of the tree and see that 13% of our training data set are from Louisiana, with 39% being parole violators.  The second level looks at multiple offenders from Louisiana, the stated condition of "multiple.offenders=no" is untrue for our example so we move to the right again and see that 8% of the training data set falls into this classification with 51% being parole violators.  The third level looks at time sentenced less than 13 years, and since our parolee was only sentenced to 10 years, we follow the tree to the left.  The next condition is time.served>=5.1 and since the the condition is untrue for our example we move to the right again.  The next condition asks if age is less than 41, which is true for our example so we move to the left.  At this point we see that 4% of the data fall into the classification we followed in the tree with 44% of our data set being parole violators.
+  
+  
+  
+### Task 4 
+
+```{r}
+parole_train_fit$fit$fit$fit$cptable
+```
+
+
+R found that the optimal CP Value is 0.01.  This aligns with the tree from task 2 since R chose 5 variables to include in the classification tree - state, multiple.offenses, max.sentence, time.served and age with 14 total splits.  
+
+### Task 5
+
+```{r}
+set.seed(123)
+folds = vfold_cv(train, v = 5)
+
+parole_train_recipe = recipe(violator ~., train) %>%
+  step_dummy(all_nominal(),-all_outcomes())
+
+tree_model = decision_tree(cost_complexity = tune()) %>% 
+  set_engine("rpart", model = TRUE) %>% 
+  set_mode("classification")
+
+tree_grid = grid_regular(cost_complexity(),
+                          levels = 25) 
+
+parole_train_wflow = 
+  workflow() %>% 
+  add_model(tree_model) %>% 
+  add_recipe(parole_train_recipe)
+
+tree_res = 
+  parole_train_wflow %>% 
+  tune_grid(
+    resamples = folds,
+    grid = tree_grid)
+
+tree_res %>%
+  collect_metrics() %>%
+  ggplot(aes(cost_complexity, mean)) +
+  geom_line(size = 1.5, alpha = 0.6) +
+  geom_point(size = 2) +
+  facet_wrap(~ .metric, scales = "free", nrow = 2)
+
+```
+
+### Task 6
+
+```{r}
+best_tree = tree_res %>%
+  select_best("accuracy")
+
+best_tree
+```
+
+
+A cost_complexity of 0.1 yields the best accuracy for the tree model.
+
+
+### Task 7
+
+```{r}
+final_wf = 
+  parole_train_wflow %>% 
+  finalize_workflow(best_tree)
+
+final_fit = fit(final_wf, train)
+
+tree = final_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+#fancyRpartPlot(tree, tweak = 1.5) 
+```
+
+
+### Task 8
+
+```{r}
+treepred = predict(final_fit, train, type = "class")
+head(treepred)
+```
+
+```{r}
+confusionMatrix(treepred$.pred_class,train$violator,positive="Yes")
+```
+
+
+The accuracy of the "root" in our model is .8836 which is basically no different than the naive model calculation.  The p-value between the model created and the naive model is statistically insignificant. 
+
+
+### Task 9
+
+```{r}
+blood <- read_csv("C:/Users/cltma/OneDrive/Documents/BAN502/Module4/Module4_Assignment1/blood.csv")
+
+blood <- blood %>%
+  mutate(DonatedMarch = as_factor(DonatedMarch)) %>%
+  mutate(DonatedMarch = fct_recode(DonatedMarch, "No" = "0", "Yes" = "1" ))
+
+str(blood)
+
+```
+
+```{r}
+set.seed(1234)
+blood_split = initial_split(blood, prob = 0.70, strata = DonatedMarch)
+train2 = training(blood_split)
+test2 = testing(blood_split)
+```
+
+```{r}
+blood_train_recipe = recipe(DonatedMarch ~ ., train2) %>%
+step_dummy(all_nominal(),-all_outcomes())
+
+tree_model2 = decision_tree() %>% 
+  set_engine("rpart", model = TRUE) %>% 
+  set_mode("classification")
+
+blood_train_wflow = 
+  workflow() %>% 
+  add_model(tree_model2) %>% 
+  add_recipe(blood_train_recipe)
+
+blood_train_fit = fit(blood_train_wflow, train2)
+```
+
+```{r}
+blood_train_fit$fit$fit$fit$cptable
+```
+
+```{r}
+blood_train_fit %>%
+  pull_workflow_fit() %>%
+  pluck("fit")  
+```
+```{r}
+tree2 = blood_train_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+
+rpart.plot(tree2, tweak=1.3)
+
+fancyRpartPlot(tree2, tweak=1.3) 
+```
+
+```{r}
+set.seed(1234)
+folds2 = vfold_cv(train2, v = 5)
+
+blood_train_recipe = recipe(DonatedMarch ~., train2) %>%
+  step_dummy(all_nominal(),-all_outcomes())
+
+tree_model2 = decision_tree(cost_complexity = tune()) %>% 
+  set_engine("rpart", model = TRUE) %>% 
+  set_mode("classification")
+
+tree_grid2 = expand.grid(cost_complexity = seq(0.001,0.01,by=0.001))
+
+blood_train_wflow = 
+  workflow() %>% 
+  add_model(tree_model2) %>% 
+  add_recipe(blood_train_recipe)
+
+tree_res2 = 
+  blood_train_wflow %>% 
+  tune_grid(
+    resamples = folds2,
+    grid = tree_grid2)
+
+tree_res2 %>%
+  collect_metrics() %>%
+  ggplot(aes(cost_complexity, mean)) +
+  geom_line(size = 1.5, alpha = 0.6) +
+  geom_point(size = 2) +
+  facet_wrap(~ .metric, scales = "free", nrow = 2)
+
+best_tree2 = tree_res2 %>%
+  select_best("accuracy")
+
+best_tree2
+
+```
+
+
+The cp value that appears to optimize accuracy is.005.  Please note that when running the treegrid code where R would sample 25 values I was receiving the same error from Task 7.  I used the expand tree grid sequence code instead to determine the best fit.
+
+
+### Task 10
+
+```{r}
+final_wf2 = 
+  blood_train_wflow %>% 
+  finalize_workflow(best_tree2)
+
+final_fit2 = fit(final_wf2, train2)
+
+tree2 = final_fit2 %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+fancyRpartPlot(tree2, tweak = 1.5)
+```
+
+### Task 11
+
+```{r}
+treepred2 = predict(final_fit2, train2, type = "class")
+head(treepred2)
+confusionMatrix(treepred2$.pred_class,train2$DonatedMarch,positive="Yes")
+```
+```{r}
+treepred3 = predict(final_fit2, test2, type = "class")
+head(treepred3)
+confusionMatrix(treepred3$.pred_class,test2$DonatedMarch,positive="Yes")
+```
+
+
+The accuracy of the predictions for trainingdata set is .8167 while the accuracy of the testing set is.8011.  For the training predictions the p-value is statistically significant for our model since it is less than .05.  However the p-value for the testing data frame is not statistically significant when comparing the naive model to the created model.  

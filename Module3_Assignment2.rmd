@@ -1,0 +1,362 @@
+---
+title: "Module3_Assignment2"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library("tidyverse")
+library("tidymodels")
+library("e1071")
+library("ROCR")
+```
+
+
+```{r}
+parole <- read_csv("C:/Users/cltma/OneDrive/Documents/BAN502/Module3/Module 3 Assignment 2/Module3_Assignment2/parole.csv")
+```
+
+```{r}
+parole <- parole %>% 
+  mutate(male = as_factor(male)) %>%
+  mutate(race = as_factor(race)) %>%
+  mutate(state = as_factor(state)) %>%
+  mutate(crime = as_factor(crime)) %>%
+  mutate(multiple.offenses =as_factor(multiple.offenses)) %>%
+  mutate(violator = as_factor(violator)) %>%
+  mutate(male = fct_recode(male, "Female" = "0", "Male" = "1" )) %>%
+  mutate(race = fct_recode(race, "Non-White" = "2", "White" = "1" )) %>%
+  mutate(state = fct_recode(state, "Kentucky" = "2", "Louisiana" = "3", "Virginia" = "4", "Other" = "1")) %>%
+  mutate(crime = fct_recode(crime, "Larceny" = "2", "Drug-Related Crime" = "3", "Driving-Related Crime" = "4", "All Other" = "1")) %>%
+  mutate(multiple.offenses = fct_recode(multiple.offenses, "No" = "0", "Yes" = "1" )) %>%
+  mutate(violator = fct_recode(violator, "No" = "0", "Yes" = "1" ))
+
+summary(parole)
+glimpse(parole)
+```
+
+### Task 1
+
+```{r split}
+set.seed(12345)
+parole_split = initial_split(parole, prob = 0.70, strata = violator)
+train = training(parole_split)
+test = testing(parole_split)
+```
+
+### Task 2
+
+#### Male
+
+```{r}
+tMale = table(parole$violator, parole$male)
+prop.table(tMale, margin = 2)
+view(tMale)
+```
+
+Very little difference in the proportion of violators based upon gender.
+
+#### Race
+
+```{r}
+tRace = table(parole$violator, parole$race)
+prop.table(tRace, margin = 2)
+view(tRace)
+```
+
+Non-White seems to make up a slightly smaller proportion of parole violators.
+
+#### State
+
+```{r}
+tState = table(parole$violator, parole$state)
+prop.table(tState, margin = 2)
+glimpse(tState)
+```
+
+Louisiana seems to have a much higher proportion of parole violators compared to other states.  However, the data set for Louisiana seems small compared to other states, so the proportion may be skewed with outliers.
+
+#### Crime
+
+```{r}
+tCrime = table(parole$violator, parole$crime)
+prop.table(tCrime, margin = 2)
+view(tCrime)
+```
+
+The proportions broken down by type of crime committed seems to be be consistent across the various types of crime except for Driving-Related Crimes which are somewhat lower.
+
+#### Multiple.Offenses
+```{r}
+tMultiple.Offenses = table(parole$violator, parole$multiple.offenses)
+prop.table(tMultiple.Offenses, margin = 2)
+view(tMultiple.Offenses)
+```
+
+Multiple Offenses seems to cause the proportion to almost double.
+
+Based on an analysis of proportions Multiple.Offenses, race and state seems to be good predictors.  The proportions when moving from False Positive to True Positive is significant in each.   
+
+### Task 3
+
+```{r}
+parole_model = 
+  logistic_reg(mode = "classification") %>% 
+  set_engine("glm")
+
+parole_recipe = recipe(violator ~ state, parole) %>%
+step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>% 
+  add_model(parole_model)
+
+parole_fit = fit(logreg_wf, parole)
+```
+
+```{r}
+summary(parole_fit$fit$fit$fit)
+```
+
+### Task 4
+
+```{r}
+train_male_model = 
+  logistic_reg(mode = "classification") %>% 
+  set_engine("glm")
+
+train_male_recipe = recipe(violator ~ male, train) %>%
+step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(train_male_recipe) %>% 
+  add_model(train_male_model)
+
+train_male_fit = fit(logreg_wf, train)
+```
+
+```{r}
+summary(train_male_fit$fit$fit$fit)
+```
+```{r}
+train_race_model = 
+  logistic_reg(mode = "classification") %>% 
+  set_engine("glm")
+
+train_race_recipe = recipe(violator ~ race, train) %>%
+step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(train_race_recipe) %>% 
+  add_model(train_race_model)
+
+train_race_fit = fit(logreg_wf, train)
+```
+
+```{r}
+summary(train_race_fit$fit$fit$fit)
+```
+```{r}
+train_state_model = 
+  logistic_reg(mode = "classification") %>% 
+  set_engine("glm")
+
+train_state_recipe = recipe(violator ~ state, train) %>%
+step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(train_state_recipe) %>% 
+  add_model(train_state_model)
+
+train_state_fit = fit(logreg_wf, train)
+```
+
+```{r}
+summary(train_state_fit$fit$fit$fit)
+```
+
+```{r}
+train_crime_model = 
+  logistic_reg(mode = "classification") %>% 
+  set_engine("glm")
+
+train_crime_recipe = recipe(violator ~ crime, train) %>%
+step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(train_crime_recipe) %>% 
+  add_model(train_crime_model)
+
+train_crime_fit = fit(logreg_wf, train)
+```
+
+```{r}
+summary(train_crime_fit$fit$fit$fit)
+```
+```{r}
+train_multiple.offenses_model = 
+  logistic_reg(mode = "classification") %>% 
+  set_engine("glm")
+
+train_multiple.offenses_recipe = recipe(violator ~ multiple.offenses, train) %>%
+step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(train_multiple.offenses_recipe) %>% 
+  add_model(train_multiple.offenses_model)
+
+train_multiple.offenses_fit = fit(logreg_wf, train)
+```
+
+```{r}
+summary(train_multiple.offenses_fit$fit$fit$fit)
+```
+State has the lowest AIC, so would be the preferable variable to use in the model if only using one variable.
+
+### Task 5
+
+```{r}
+train_model = 
+  logistic_reg(mode = "classification") %>% 
+  set_engine("glm")
+
+train_recipe = recipe(violator ~ state + race + multiple.offenses, train) %>%
+step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(train_recipe) %>% 
+  add_model(train_model)
+
+train_fit = fit(logreg_wf, train)
+```
+
+```{r}
+summary(train_fit$fit$fit$fit)
+```
+The variable with the most significant p-values are multiple offender = yes. The AIC score is lower including the multiple variables above rather than selecting just an individual variable.  
+
+
+### Task 6
+
+```{r}
+newdata = data.frame(race = "White", state = "Louisiana", multiple.offenses = "Yes")
+predict(train_fit, newdata, type="prob")
+```
+```{r}
+newdata = data.frame(race = "Non-White", state = "Kentucky", multiple.offenses = "No")
+predict(train_fit, newdata, type="prob")
+```
+
+### Task 7
+
+```{r}
+predictions = predict(train_fit, train, type="prob")[2]
+head(predictions)
+
+```
+```{r}
+ROCRpred = prediction(predictions, train$violator)
+
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+```{r}
+as.numeric(performance(ROCRpred, "auc")@y.values)
+```
+```{r}
+opt.cut = function(perf, pred){
+    cut.ind = mapply(FUN=function(x, y, p){
+        d = (x - 0)^2 + (y-1)^2
+        ind = which(d == min(d))
+        c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+            cutoff = p[[ind]])
+    }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+
+
+### Task 8
+
+
+```{r}
+t1 = table(train$violator,predictions > 0.1070172)
+t1
+```
+
+#### Accuracy
+
+```{r}
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+#### Sensitivity
+
+```{r}
+41/(41+368)
+```
+#### Specificity
+
+```{r}
+80/(80+18)
+
+```
+Incorrectly classifying a parolee could mean that the model could be inaccurate and skewed when making decisions on ways to prevent parole violations.  
+
+### Task 9
+
+```{r}
+t1 = table(train$violator,predictions > 0.5)
+t1
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+```{r}
+t1 = table(train$violator,predictions > 0.4)
+t1
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+```{r}
+t1 = table(train$violator,predictions > 0.3)
+t1
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+```{r}
+t1 = table(train$violator,predictions > .54)
+t1
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+
+
+```{r}
+test_model = 
+  logistic_reg(mode = "classification") %>% 
+  set_engine("glm")
+
+test_recipe = recipe(violator ~ state + race + multiple.offenses, test) %>%
+step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(test_recipe) %>% 
+  add_model(test_model)
+
+test_fit = fit(logreg_wf, test)
+```
+
+```{r}
+summary(test_fit$fit$fit$fit)
+```
+```{r}
+predictions2 = predict(test_fit, test, type="prob")[2]
+head(predictions2)
+```
+```{r}
+t2 = table(test$violator,predictions2 > .54)
+t2
+```
+```{r}
+(t2[1,1]+t2[2,2])/nrow(test)
+```
+The accuracy of the test data using the probability threshold of .54 is slightly higher at .922 versus accuracy of the training set at .8895.

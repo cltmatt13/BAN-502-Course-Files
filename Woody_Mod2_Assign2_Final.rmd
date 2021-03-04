@@ -1,0 +1,213 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+# Module 2 Assignment 2
+## Matthew Woody
+
+
+### Package Loads
+```{r package_loads, message=FALSE,warning=FALSE}
+library("tidyverse")
+library("tidymodels")
+library("glmnet")
+library("GGally")
+library("ggcorrplot")
+library("MASS")
+library("car")
+library("lubridate")
+library("lmtest")
+```
+
+
+### Task 1
+```{r data_conversion,message=FALSE,warning=FALSE,results=FALSE}
+bike <- read_csv("bike_cleaned.csv")
+bike <- bike %>% mutate(dteday = mdy(dteday))
+bike <- bike %>% mutate_if(is.character,as.factor)
+bike$hr = as_factor(bike$hr)
+glimpse(bike)
+summary(bike)
+```
+
+
+The column hr was converted into a factor since it is actually categorical since it is a "point in time" as opposed to being numeric. Leaving as numbers would produce incorrect results in all of the statistical calculation such as correlation, r-square, p-value, etc.
+
+
+### Task 2
+```{r correlations,message=FALSE,warning=FALSE}
+ggcorr(bike, label = TRUE, label_size = 2, label_round = 3)
+```
+
+
+The temp variable seems to have the highest correlation with the count variable at 0.405.
+
+
+### Task 3
+```{r boxplotseason,message=FALSE,warning=FALSE}
+ggplot(bike,aes(x=season,y=count)) + geom_boxplot() + theme_bw()
+```
+
+
+Season does seem to impact count as the number of bike cleanings in winter are significantly lower.  There would be multicollinearity with the month.  Perhaps temperature would be a better variable.
+
+
+```{r boxplotmnth,message=FALSE,warning=FALSE}
+ggplot(bike,aes(x=mnth,y=count)) + geom_boxplot() + theme_bw()
+```
+
+
+Month does seem to impact count as the number of bike cleanings in winter months are significantly lower.  There would be multicollinearity with the season.  Perhaps temperature would be a better variable.
+
+
+```{r boxplothr,message=FALSE,warning=FALSE}
+ggplot(bike,aes(x=hr,y=count)) + geom_boxplot() + theme_bw()
+```
+
+
+Hour does seem to impact count as the morning and early evening hours are significantly higher in count.  Perhaps temperature would be a better variable since bike cleaning would take place during the most comfortable times for temperature during 24 hours.
+
+
+```{r boxplotholiday,message=FALSE,warning=FALSE}
+ggplot(bike,aes(x=holiday,y=count)) + geom_boxplot() + theme_bw()
+```
+
+
+Holiday seems to impact count but would have multicollinarity with the Working Day field.
+
+
+```{r boxplotweekday,message=FALSE,warning=FALSE}
+ggplot(bike,aes(x=weekday,y=count)) + geom_boxplot() + theme_bw()
+```
+
+
+Weekday could possibly have an impact on count, as it seems the counts for Saturday-Sunday are significantly lower.  There would be multicollinearity with the working day field.
+
+
+```{r boxplotworkingday,message=FALSE,warning=FALSE}
+ggplot(bike,aes(x=workingday,y=count)) + geom_boxplot() + theme_bw()
+```
+
+
+Weekday could possibly have an impact on count, as it seems the counts for Saturday-Sunday are significantly lower.  There would be multicollinearity with the Week day field.
+
+
+```{r boxplotweathersit,message=FALSE,warning=FALSE}
+ggplot(bike,aes(x=weathersit,y=count)) + geom_boxplot() + theme_bw()
+```
+
+
+Weather Situation seems to have an impact on count, but there could possibly be multicollinarity with the Season and Month fields.
+
+
+### Task 4
+
+```{r temp_model}
+temp_model = recipe(count ~ temp, bike)
+
+lm_model = 
+  linear_reg() %>% 
+  set_engine("lm") 
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(temp_model)
+
+lm_fit = fit(lm_wflow, bike)
+
+summary(lm_fit$fit$fit$fit)
+
+ggplot(bike, aes(x=temp,y=count)) + geom_point() + 
+  geom_smooth(method="lm",se=FALSE, color="red") + theme_bw()
+
+```
+```{r}
+dwtest(lm_fit$fit$fit$fit)
+
+bike = bike %>% mutate(resid1 = lm_fit$fit$fit$fit$residuals) 
+
+ggplot(bike,aes(x=temp,y=resid1)) + geom_point()+ geom_smooth() + theme_bw()
+
+ggplot(bike,aes(x=resid1)) + geom_histogram() + theme_bw()
+```
+
+
+There seems to be a "mixed-bag" over whether temperature alone is a good predictor for count.  The R-Squared is low at .1638 while the p-value seems to indicate that temperature is a significant variable. A scatter plot and best fit line of the data points seems to show something of a linear relationship to a certain temperature, although the relationship between count and temperature seems to diminish somewhat at higher temperatures.  Running the diagnostics on the model, the Durbin-Watson test shows that the residuals are independent.  Plotting the residuals in a scatter plot shows that a non-linear effect is present and a histogram plot shows that there is a normal distribution.  Adding additional variables would increase the r-squared and improve the model.
+
+
+
+### Task 5
+```{r}
+bike2<-bike %>% dplyr::select(-instant,-dteday,-registered,-casual,-resid1)
+
+bike_ridge<-recipe(count~.,bike2) %>%
+  step_dummy(all_nominal())%>%
+  step_center(all_predictors()) %>% 
+  step_scale(all_predictors()) 
+  
+ridge_model = 
+  linear_reg(mixture = 0) %>% 
+  set_engine("glmnet") 
+
+ridge_wflow = 
+  workflow() %>% 
+  add_model(ridge_model) %>% 
+  add_recipe(bike_ridge)
+
+ridge_fit = fit(ridge_wflow, bike2)
+```
+
+```{r}
+ridge_fit %>%
+  pull_workflow_fit() %>%
+  pluck("fit")
+```
+
+```{r}
+ridge_fit %>%
+  pull_workflow_fit() %>%
+  pluck("fit")  %>% 
+  coef(s = 43) 
+```
+
+Pulling in all the variables, I selected the lambda value of 43, which would give me an R-Squared value of 60%.  Many of the variables no doubt have multicollinarity, so the Ridge model would be beneficial to use for the purposes of modeling all the predictors.  The model shows considerable variability in the slope coefficients for hour, season and month.   
+
+
+### Task 6
+```{r}
+bike_lasso<-recipe(count~.,bike2) %>%
+step_dummy(all_nominal()) %>% 
+  step_center(all_predictors()) %>% 
+  step_scale(all_predictors())
+
+lasso_model =
+  linear_reg(mixture = 1) %>% 
+  set_engine("glmnet")
+
+lasso_wflow = 
+  workflow() %>% 
+  add_model(lasso_model) %>% 
+  add_recipe(bike_lasso)
+
+lasso_fit = fit(lasso_wflow, bike2)
+```
+
+```{r}
+lasso_fit %>%
+  pull_workflow_fit() %>%
+  pluck("fit")
+```
+
+```{r}
+lasso_fit %>%
+  pull_workflow_fit() %>%
+  pluck("fit")  %>% 
+  coef(s = .582)
+```
+
+Using the Lasso model method, I chose the Lambda coefficient value of .582 which would give me an r-squared value of 63%.  The Lasso method zeroed out many of the variables.
+
+
+Given that there is quite definitely multicollinarity in our predictor variables, perhaps the ridge method is a better choice for determining predictability by variable.  

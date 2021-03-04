@@ -1,0 +1,120 @@
+---
+title: "Woody_Module2_Assign1_final"
+output: word_document
+---
+## Task 1
+```{r Task1}
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+library(lmtest)
+air=airquality
+summary(air)
+```
+Ozone is the likely "Y" variable
+
+## Task 2
+```{r task2}
+
+air2<- drop_na(air, Ozone, Solar.R)
+
+```
+
+## Task 3
+
+```{r task3}
+ggpairs(air2)
+```
+```{r task3 pt2}
+ggcorr(air2, label = TRUE)
+```
+Day is the least associated with the Ozone variable
+Temp is the most strongly associated with the Ozone variable.
+
+## Task 4
+
+```{r}
+ggplot(air2,aes(x=Temp,y=Ozone))+geom_point(alpha=0.1) + geom_smooth(method = "lm", color = "red") + theme_bw()
+```
+
+## Task 5
+
+```{r}
+Ozone_Model = recipe(Ozone ~ Temp, air2)
+Ozone_Model
+```
+```{r}
+lm_model = #give the model type a name 
+  linear_reg() %>% #specify that we are doing linear regression
+  set_engine("lm") #specify the specify type of linear tool we want to use 
+```
+
+```{r}
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(Ozone_Model)
+
+lm_fit = fit(lm_wflow, air2)
+
+summary(lm_fit$fit$fit$fit)
+```
+```{r}
+confint(lm_fit$fit$fit$fit)
+```
+
+```{r}
+ggplot(air2,aes(x=Temp,y=Ozone))+geom_point(alpha=0.1) + geom_smooth(method = "lm", se=FALSE) + theme_bw()
+```
+
+## Task 7
+
+```{r}
+testdata = data.frame(Temp = c(80,90,100))
+predict(lm_fit, new_data = testdata)
+
+-147.6461 + 2.4391*80
+```
+```{r}
+#Prediction intervals
+temp_var = predict(lm_fit$fit$fit$fit, interval = "prediction") #accessing the fit object with the three $fit
+new_df = cbind(air2, temp_var)
+
+ggplot(new_df, aes(x = Temp, y = Ozone)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  geom_line(aes(y=lwr), color = "red", linetype = "dashed") +
+  geom_line(aes(y=upr), color = "red", linetype = "dashed") +
+  theme_bw()
+```
+## Task 8
+
+**Assumption 1:** The predictor and response variable have a linear relationship  
+As noted above, it seems "reasonable" to say that there is something of a linear relationship between these two variables, but there is definitely a nonlinear effect present.  
+
+**Assumption 2:** Model errors (residuals) are independent  
+Let's use the Durbin-Watson Test to examine independence of residuals. The dwtest function is from the lmtest package.  
+```{r}
+dwtest(lm_fit$fit$fit$fit)
+```
+We fail to reject the null hypothesis with a p-value greater than 0.05. This suggests that the residuals are likely independent.  
+
+**Assumption 3:** Model residuals exhibit constant variance  
+Examine a plot of residuals.  
+```{r}
+air3 = air2 %>% mutate(resid1 = lm_fit$fit$fit$fit$residuals) #add the model residuals to our data frame
+ggplot(air3,aes(x=Temp,y=resid1)) + geom_point() + theme_bw()
+```
+A non-linear effect is present.
+
+**Assumption 4:** Model residuals are Normally-distributed  
+Examine a histogram of the residuals.  
+```{r}
+ggplot(air3,aes(x=resid1)) + geom_histogram() + theme_bw()
+```
+
+
+```{r}
+
+```
+

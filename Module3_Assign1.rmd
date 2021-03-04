@@ -1,0 +1,96 @@
+---
+title: "Module3_Assign1"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library("tidyverse")
+library("lubridate")
+library("tidymodels")
+```
+
+```{r bike}
+bike_cleaned <- read_csv("bike_cleaned.csv")
+bike <- bike_cleaned %>% mutate(dteday = mdy(dteday))
+bike <- bike %>% mutate_if(is.character,as_factor)
+bike$hr = as_factor(bike$hr)
+glimpse(bike)
+summary(bike)
+```
+
+### Task 1
+
+```{r task1}
+set.seed(1234)
+bike_split = initial_split(bike, prob = 0.70, strata = count)
+train = training(bike_split)
+test = testing(bike_split)
+```
+
+### Task 2
+
+Test set contains 4,343 observations.
+Training set contains 13,036 observations.
+
+### Task 3
+
+```{r task3}
+biketrain_recipe = recipe(count ~ season + mnth + hr + holiday + weekday + temp + weathersit, train) %>%
+  step_dummy(all_nominal())
+
+lm_model = 
+  linear_reg() %>% 
+  set_engine("lm") 
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(biketrain_recipe)
+
+lm_fit = fit(lm_wflow, train)
+
+summary(lm_fit$fit$fit$fit)
+
+
+```
+
+The model has an adjusted R squared of 62.29%.  The model likely has multicollinarity with the predictors being highly correlated.
+
+### Task 4
+
+```{r task4}
+predict_train = predict(lm_fit,train)
+```
+
+```{r}
+ggplot(predict_train, aes(x=.pred)) + geom_histogram() + theme_bw()
+```
+
+The distribution in the histogram above seems slightly skewed, perhaps indicating that their are outliers present in the predicted values.  Outliers in the predicted values would indicate outliers in the data frame values as well.   
+
+#### Task 5
+
+```{r}
+biketrain_recipe = recipe(count ~ season + mnth + hr + holiday + weekday + temp + weathersit, test) %>%
+  step_dummy(all_nominal())
+
+lm_model_test = 
+  linear_reg() %>% 
+  set_engine("lm") 
+
+lm_wflow_test = 
+  workflow() %>% 
+  add_model(lm_model_test) %>% 
+  add_recipe(biketrain_recipe)
+
+lm_fit_test = fit(lm_wflow_test, test)
+
+summary(lm_fit_test$fit$fit$fit)
+
+```
+
+The R-Squared value of the test data frame is nearly identical to the adjusted R-Squared of the testing set at .623.

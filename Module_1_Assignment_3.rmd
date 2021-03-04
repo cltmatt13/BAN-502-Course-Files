@@ -1,0 +1,81 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+# Module 1 Assignment 3  
+## Matthew Woody
+
+### Task 1
+```{r package,message=FALSE,warning=FALSE}
+# install.packages("tidyverse")
+library(tidyverse)
+# install.packages("esquisse")
+# library(esquisse)
+```
+### Task 2
+```{r datadiamonds}
+view(diamonds)
+diamonddata<-(diamonds)
+sample(diamonddata)
+```
+**The Data set "diamonddata" contains 53,940 observations (rows) and 10 variables (columns).**
+
+### Task 3
+```{r plot}
+ggplot(diamonddata, aes(x=carat, y=price))+geom_point()
+```
+
+**According to the scatter plot of the variables carat as related to price, it appears that higher carat diamonds sell for a higher price.**
+
+### Task 4
+```{r plot_w_cut}
+ggplot(diamonddata, aes(x=carat, y=price, color=cut))+geom_point()
+```
+
+**The carat of the diamond does not seem to have any bearing on the cut of the diamond. It does seem that diamonds with a cut rated as premium or ideal do possibly command a higher price than fair or good rated diamond cuts.**
+
+### Task 5
+```{r plot_w_color}
+ggplot(diamonddata, aes(x=carat, y=price, color=cut))+geom_point()+facet_wrap(~color)
+```
+
+**It appears that as the color class ascends from class "D" to "J" the carat size gradually increases.  It does not seem that cut has any bearing on color. It does seem that both increased carat size and ascending color class may both have an impact on price.**
+
+### Task 6
+```{r inventory, error=FALSE,message=FALSE}
+library(readr)
+Inventory <- read_csv("InventoryData.csv")
+View(Inventory)
+sample(Inventory)
+```
+
+**Data Frame contains 6 columns and 13,561 observations (rows).**
+
+### Task 7
+```{r inventoryA}
+InventoryA <- Inventory %>%
+  filter(Supplier == "A")
+sample(InventoryA)
+```
+
+**The InventoryA data frame contains 3,695 rows.**
+
+### Task 8
+```{r mutate}
+InventoryA = mutate(InventoryA, OnHandRatio =`On Hand`/`Annual Demand`)
+sample(InventoryA)
+```
+
+**The mutate code above divides the On Hand data by the Annual Demand to create a new column called OnHandRatio.**
+
+### Task 9
+```{r SKU}
+avg_cost<-InventoryA %>%
+group_by(`Item SKU`) %>%
+summarize(SKUAvgCost = mean(`Cost per Unit ($)`))
+sample(avg_cost)
+```
+### Task 10
+
+**I found the various ways to format charts to be perhaps the most challenging part of working in R and RStudio.  While I was able to eventually complete assignments, I did find that it required greater thought and more time to fully grasp the language for formatting charts.**
